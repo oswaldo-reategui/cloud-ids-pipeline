@@ -1,4 +1,4 @@
-# **Cloud IDS Pipeline — Zeek + Redis Streams + tcpreplay**
+# **Cloud IDS Pipeline: Zeek + Redis Streams + tcpreplay**
 
 **Author:** Oswaldo Reategui Garcia
 **University:** University of London
