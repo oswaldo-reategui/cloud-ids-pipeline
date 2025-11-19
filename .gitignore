@@ -1,0 +1,15 @@
+# macOS metadata
+.DS_Store
+
+# Zeek runtime logs (keep folder only)
+data/zeek/*
+!data/zeek/.gitkeep
+
+# Do not include dataset files
+data/TrafficCSV/*
+*.csv
+*.pcapng
+
+# Editor settings
+.vscode/
+.idea/

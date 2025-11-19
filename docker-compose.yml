@@ -1,0 +1,63 @@
+
+services:
+  # ──────────────────────────────
+  # In-memory log store
+  # ──────────────────────────────
+  redis:
+    image: redis:7.2-alpine       # lightweight Redis v7.2 on Alpine Linux
+    container_name: ids_redis     # container name
+    ports:
+      - "6379:6379"               # expose port 6379 on host for client connections
+
+  # ──────────────────────────────
+  # Packet parser (Zeek IDS) in live mode
+  # ──────────────────────────────
+  zeek:
+    image: zeek/zeek:7.1.1        # official Zeek v7.1.1 image
+    container_name: ids_zeek      # container name
+    privileged: true              # required for packet capture
+    cap_add:
+      - NET_RAW                   # allow raw socket access
+      - NET_ADMIN                 # allow network admin capabilities
+    volumes:
+      - ./data/zeek:/logs         # mount host folder to store Zeek output logs
+    working_dir: /logs            # ensure logs are written to /logs
+    command: 
+      [
+        "zeek", 
+        "-i", "eth0",             # sniff on interface eth0
+        "LogAscii::use_json=T"    # output logs as JSON
+      ]
+
+  # ──────────────────────────────
+  # Packet replayer (local build)
+  # ──────────────────────────────
+  replayer:
+    build:
+      context: ./replayer           # path to Dockerfile (see replayer/Dockerfile)
+    container_name: ids_replayer    # container name
+    network_mode: "service:zeek"    # shares network with the zeek container
+    volumes:
+      - ./data/pcap:/pcap:ro        # mount PCAP folder read-only
+    command: 
+      [
+        "-i", "eth0",               # sniff on interface eth0
+        "-t", "/pcap/example.pcap"  # topspeed replay of example.pcap
+      ]
+
+  # ────────────────────────────────────────────────────
+  # Zeek -> Redis log consumer (Python)
+  # ────────────────────────────────────────────────────
+  consumer:
+    build:
+      context: ./consumer                     # points to consumer/Dockerfile
+    container_name: ids_consumer              # name for the consumer container
+    depends_on:
+      - redis                                 # ensure Redis is up before this service starts
+      - zeek                                  # ensure Zeek is running so /logs/conn.log will appear
+    volumes:
+      - ./data/zeek:/logs                     # mount host’s Zeek output into /logs
+    environment:
+      - REDIS_HOST=redis                      # use "redis" as hostname (Docker network alias)
+      - REDIS_PORT=6379                       # redis port inside the cluster
+    command: ["python", "zeek_to_redis.py"]   # run the Python script that tails conn.log and XADDs into Redis
